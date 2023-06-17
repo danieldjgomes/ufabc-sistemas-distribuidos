@@ -40,6 +40,9 @@ def setupClient(socket):
         entrada = input()
         if entrada == "JOIN":
             break
+    CallJoin(socket)
+
+def CallJoin(socket):
     pastaPeer = os.getcwd() + "/p2p/" + str(socketServer.getsockname()[1])
     pathArquivos = pastaPeer
     message = json.dumps({"method": "JOIN", "data": {"filesPath": pathArquivos}})
@@ -57,78 +60,88 @@ def handleDownload(socket):
     request = socket.recv(1024).decode()
     data = json.loads(request)
     filename = data["data"]["filename"]
-    peer = data["data"]['port']
+    peer = data["data"]["port"]
 
-    folder = os.path.join(os.path.join(os.getcwd(), "peers"), str(peer))
+    folder = os.path.join(os.path.join(os.getcwd(), "p2p"), str(peer))
+    print(folder)
     if filename in os.listdir(folder):
-
         path = os.path.join(folder, filename)
         size = os.path.getsize(path)
-        response = {"status": "OK", "file_size": size}
+        response = {"status": "OK", "fileSize": size}
         socket.send(json.dumps(response).encode())
-        size = os.path.getsize(path) 
-        bytes = 0
-        sendRate = 1024*1024*10
-
-        with open(path, "rb") as file:
-            while True:
-                data = file.read(sendRate)
-                if not data:
-                    break
-                socket.send(data)
-                bytes += len(data)
-                percentage = (bytes / size) * 100
-                print(f"Enviando... {percentage:.2f}%")
+        userInput = input("Gostaria de Aprovar o download? (SIM/NAO): ")
+        print(userInput)
+        if userInput.lower() == "SIM":
+            response = {"status": "downloadAccepted"}
+            socket.send(json.dumps(response).encode())
+            size = os.path.getsize(path) 
+            bytes = 0
+            sendRate = 1024 * 1024 * 1024
+            with open(path, "rb") as file:
+                while True:
+                    data = file.read(sendRate)
+                    if not data:
+                        break
+                    socket.send(data)
+                    bytes += len(data)
+                    percentage = (bytes / size) * 100
+                    print(f"Enviando... {percentage:.2f}%")
+        else:
+            response = {"status": "downloadRejected"}
+            socket.send(json.dumps(response).encode())
     else:
-        response = {"status": "FILE_NOT_FOUND"}
+        response = {"status": "fileNotFound"}
         socket.send(json.dumps(response).encode())
     socket.close()
+
 
 def handleRequest():
     downloadSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     downloadSocket.bind(('127.0.0.1', clientPort))
     downloadSocket.listen(5)
 
-    while True:
-        clientSocket, _ = downloadSocket.accept()
-        threading.Thread(target=handleDownload, args=(clientSocket,)).start()
+    #Aceitar request
+    clientSocket, _ = downloadSocket.accept()
+    threading.Thread(target=handleDownload, args=(clientSocket,)).start()
 
 def comandosCliente(serverSocket, un):
     print("Insira algum dos comandos aceitos: \n - SEARCH \n - DOWNLOAD \n")
     entrada = input().upper()
 
     if entrada == "SEARCH":
-        entrada = input("Insira o arquivo que deseja buscar:\n")
-        message = '''{"method":"SEARCH","data":{"query":"%s"}}''' % entrada
-        serverSocket.sendall(message.encode())
-        print(f"Peers com arquivo solicitado: {serverSocket.recv(1024).decode()} ")
+        entrada = callSearch(serverSocket)
 
     elif entrada == "DOWNLOAD":
+        callDownload(serverSocket)
+    
+    threading.Thread(target=comandosCliente, args=(serverSocket, serverSocket)).start()
+
+def callDownload(serverSocket):
         arquivo = input("Insira o nome do arquivo que deseja baixar:\n")
         endereco_peer_arquivo = int(input("Insira a porta do peer a partir do qual deseja baixar o arquivo:\n"))
 
+        peerSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        peerSocket.connect((addressServer, endereco_peer_arquivo))
 
         message = '''{{"method": "DOWNLOAD_REQUEST", "data": {{"filename": "{}", "port": {}}}}}'''.format(arquivo, endereco_peer_arquivo)
-        serverSocket.sendall(message.encode())
-        resposta = serverSocket.recv(1024).decode()
+        peerSocket.sendall(message.encode())
 
-        if resposta =="OK":
-            peerClientSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            peerClientSocket.connect((addressServer, endereco_peer_arquivo))
+        response = peerSocket.recv(1024).decode()
+        print(response)
+        data = json.loads(response)
 
-            message = '''{{"method": "DOWNLOAD_REQUEST", "data": {{"filename": "{}", "port": {}}}}}'''.format(arquivo, endereco_peer_arquivo)
-            peerClientSocket.sendall(message.encode())
+        if data["status"] == "OK":
+            file_size = data["fileSize"]
+            bytesReceived = 0  
+            data = b""  
 
-            response = peerClientSocket.recv(1024).decode()
+            response = peerSocket.recv(1024).decode()
+            print(response)
             data = json.loads(response)
-
-            if data["status"] == "OK":
-                file_size = data["file_size"]
-                bytesReceived = 0  
-                data = b""  
+            if data["status"] == "downloadAccepted":
                 print("Download do arquivo iniciado")
                 while bytesReceived < file_size:
-                    data = peerClientSocket.recv(1024*1024*10)
+                    data = peerSocket.recv(1024*1024*1024)
                     data += data
                     bytesReceived += len(data)
                 filePath = os.path.join(folderPeer, arquivo)
@@ -143,18 +156,23 @@ def comandosCliente(serverSocket, un):
                 serverSocket.sendall(message.encode())
                 print(serverSocket.recv(1024).decode())
             else:
-                print("Arquivo não encontrado.")
-
+                print("Download Rejeitado")
         else:
-            print("Arquivo não autorizado")
+            print("Arquivo não encontrado.")
 
-    threading.Thread(target=comandosCliente, args=(serverSocket, serverSocket)).start()
+
+def callSearch(serverSocket):
+    entrada = input("Insira o arquivo que deseja buscar:\n")
+    message = '''{"method":"SEARCH","data":{"query":"%s"}}''' % entrada
+    serverSocket.sendall(message.encode())
+    print(f"Peers com arquivo solicitado: {serverSocket.recv(1024).decode()} ")
+    return entrada
 
 def run():
     try:
-        threading.Thread(target=handleRequest).start()
-        threading.Thread(target=comandosCliente, args=(socketServer, socketServer)).start()
-        threading.Event().wait()
+            threading.Thread(target=comandosCliente, args=(socketServer, lock)).start()
+            threading.Thread(target=handleRequest).start()
+            threading.Event().wait()
     finally:
         socketServer.close()
 

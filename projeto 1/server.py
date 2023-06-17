@@ -60,8 +60,7 @@ s.listen(1)
         
 def run(doUpdate, doSearch, doJoin, receiveData, listOfPeers, c, addr):
     c.settimeout(2)
-    print('Connected: ', addr)
-    
+  
     while True:
         call = receiveData(c)
 
