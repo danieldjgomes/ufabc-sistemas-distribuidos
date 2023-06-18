@@ -40,7 +40,7 @@ def receiveData(c):
 listOfPeers = dict()
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 port = 12346
-s.bind(('127.0.0.1',port))
+s.bind(('',port))
 
 print(
     """
