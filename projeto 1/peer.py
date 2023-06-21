@@ -20,18 +20,6 @@ class P2PClient:
         os.mkdir(self.folderPeer)
 
     def setupClient(self):
-        print("""
- ::::::::    :::        ::::::::::: :::::::::: ::::     ::: :::::::::::  ::::::::::
-++:    +:+   :+:            :+:     :+:        :+:+:    :+:     :+:     :+:
-+            +:+            +:+     +:+        +:+ +:+  +:+     +:+     +:+
-+            +#+            +#+     +#++:++#   +#+  +#+ +#+     +#+     +#++:++
-+            +#+            +#+     +#+        +#+   +#+#+#     +#+     +#+
-+#      +++  #+#            #+#     #+#        #+#    #+#+#     #+#     #+#
- #########    ########## ########## ########## ###     ####     ###     ##########
-
-        """)
-
-        print("Está conectando no servidor: " + str(self.addressServer) + ":" + str(self.serverPort))
         while True:
             try:
                 print("Digite 'JOIN' para iniciar.")
@@ -108,7 +96,6 @@ class P2PClient:
             downloadSocket.bind(('127.0.0.1', self.clientPort))
             downloadSocket.listen(5)
 
-            # Aceitar request
             clientSocket, _ = downloadSocket.accept()
             threading.Thread(target=self.callUpload, args=(clientSocket,)).start()
         except Exception as e:
@@ -151,21 +138,20 @@ class P2PClient:
             data = json.loads(response)
 
             if data["status"] == "OK":
-                file_size = data["fileSize"]
+                fileSize = data["fileSize"]
                 bytesReceived = 0
                 data = b""
                 response = peerSocket.recv(1024).decode()
                 data = json.loads(response)
                 if data["status"] == "downloadAccepted":
-                    print("Download do arquivo iniciado")
-                    while bytesReceived < file_size:
+                    while bytesReceived < fileSize:
                         data = peerSocket.recv(1024 * 1024 * 1024)
                         data += data
                         bytesReceived += len(data)
                     filePath = os.path.join(self.folderPeer, arquivo)
                     with open(filePath, "wb") as file:
                         file.write(data)
-                    print("Download concluído com sucesso.")
+                    print("“Arquivo " + arquivo + "baixado com sucesso na pasta " + filePath)
 
                     arquivos = os.listdir(self.folderPeer)
                     arquivos_formatados = ['"{}"'.format(item) for item in arquivos]
@@ -200,7 +186,6 @@ class P2PClient:
             self.socketServer.close()
 
 
-# Usage example:
 client = P2PClient()
 client.setupClient()
 client.run()
