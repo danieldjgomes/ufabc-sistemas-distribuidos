@@ -5,7 +5,10 @@ import json
 
 
 class P2PClient:
+
     def __init__(self):
+        
+            ## Inicia as variáveis globais do peer
         self.isDownloading = False
         self.filesList = []
         self.socketServer = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -20,6 +23,7 @@ class P2PClient:
         os.mkdir(self.folderPeer)
 
     def setupClient(self):
+        ## Aguarda chamada JOIN do peer ao Server e chama o metodo Join
         while True:
             try:
                 print("Digite 'JOIN' para iniciar.")
@@ -31,11 +35,13 @@ class P2PClient:
         self.callJoin()
 
     def callJoin(self):
+        ## Pega o Path dos arquivos na pasta e envia ao server
         pastaPeer = os.getcwd() + "/p2p/" + str(self.socketServer.getsockname()[1])
         pathArquivos = pastaPeer
         message = json.dumps({"method": "JOIN", "data": {"filesPath": pathArquivos}})
         self.socketServer.sendall(message.encode())
 
+        ## Ao receber o JOIN_OK do server monta a mensagem de JOIN
         if self.socketServer.recv(1024).decode() == "JOIN_OK":
             arquivos = os.listdir(pastaPeer)
             arquivosFormatados = ['"{}"'.format(item) for item in arquivos]
@@ -45,6 +51,7 @@ class P2PClient:
             raise Exception("Falha na Conexao! Programa finalizado.")
 
     def callUpload(self, socket):
+        ## Monta o UPLOAD do arquivo 
         try:
             request = socket.recv(1024).decode()
             data = json.loads(request)
@@ -58,23 +65,19 @@ class P2PClient:
                 response = {"status": "OK", "fileSize": size}
                 socket.send(json.dumps(response).encode())
                 self.isDownloading = True
+                ## Executa a lógica de aprovar ou não o download de um peer
                 while True:
                     userInput = input("Gostaria de Aprovar o download? (SIM/NAO): ")
                     if userInput == "SIM":
                         response = {"status": "downloadAccepted"}
                         socket.send(json.dumps(response).encode())
                         size = os.path.getsize(path)
-                        bytes = 0
-                        sendRate = 1024 * 1024 * 1024
                         with open(path, "rb") as file:
                             while True:
-                                data = file.read(sendRate)
+                                data = file.read()
                                 if not data:
                                     break
-                                socket.send(data)
-                                bytes += len(data)
-                                percentage = (bytes / size) * 100
-                                print(f"Enviando... {percentage:.2f}%")
+                                socket.sendall(data)            
                         break
                     elif userInput == "NAO":
                         response = {"status": "downloadRejected"}
@@ -91,6 +94,7 @@ class P2PClient:
             threading.Thread(target=self.comandosCliente, args=(self.socketServer,)).start()
 
     def handleRequest(self):
+        ## Liga com as conexoes com outros peers caso ocorra uma solicitação de download para este peer
         try:
             downloadSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             downloadSocket.bind(('127.0.0.1', self.clientPort))
@@ -102,6 +106,7 @@ class P2PClient:
             print(f"Erro ao processar a solicitação: {str(e)}")
 
     def getInput(self):
+        ## Executa a lógica de aguardar a instrução do usuário ao utilizar o prompt para realizar as ações de SEARCH ou DOWNLOAD
         try:
             while True:
                 if not self.isDownloading:
@@ -120,9 +125,11 @@ class P2PClient:
             print(f"Erro ao processar entrada: {str(e)}")
 
     def comandosCliente(self, serverSocket):
+        ## Cria a Thread que aguarda e executa ações com base nos inputs do usuario
         threading.Thread(target=self.getInput).start()
 
     def callDownload(self, serverSocket):
+        ## Monta a Requisição de download do arquivo e envia ao outro peer
         try:
             arquivo = input("Insira o nome do arquivo que deseja baixar:\n")
             endereco_peer_arquivo = int(input("Insira a porta do peer a partir do qual deseja baixar o arquivo:\n"))
@@ -137,22 +144,21 @@ class P2PClient:
             response = peerSocket.recv(1024).decode()
             data = json.loads(response)
 
+            ## Avalia a resposta do outro peer à solicitação de download
             if data["status"] == "OK":
                 fileSize = data["fileSize"]
-                bytesReceived = 0
                 data = b""
                 response = peerSocket.recv(1024).decode()
                 data = json.loads(response)
+                ## Executa o Download
                 if data["status"] == "downloadAccepted":
-                    while bytesReceived < fileSize:
-                        data = peerSocket.recv(1024 * 1024 * 1024)
-                        data += data
-                        bytesReceived += len(data)
+                    data = peerSocket.recv(fileSize)
                     filePath = os.path.join(self.folderPeer, arquivo)
                     with open(filePath, "wb") as file:
                         file.write(data)
                     print("“Arquivo " + arquivo + "baixado com sucesso na pasta " + filePath)
 
+                    ## Envia a pensagem de UPDATE ao server
                     arquivos = os.listdir(self.folderPeer)
                     arquivos_formatados = ['"{}"'.format(item) for item in arquivos]
                     arquivos_concatenados = ','.join(arquivos_formatados)
@@ -168,6 +174,7 @@ class P2PClient:
             print(f"Erro ao processar download: verifique se as informações enviadas estão corretas!")
 
     def callSearch(self, serverSocket):
+        ## Monta e realiza a chamada de SEARCH ao servidor
         try:
             entrada = input("Insira o arquivo que deseja buscar:\n")
             message = '''{"method":"SEARCH","data":{"query":"%s"}}''' % entrada
@@ -178,6 +185,7 @@ class P2PClient:
             print(f"Erro ao buscar arquivo: {str(e)}")
 
     def run(self):
+        ## Chama de execução dos métodos em multi-thread
         try:
             threading.Thread(target=self.comandosCliente, args=(self.socketServer,)).start()
             threading.Thread(target=self.handleRequest).start()
@@ -185,7 +193,7 @@ class P2PClient:
         finally:
             self.socketServer.close()
 
-
+## Constroi o objecto da classe e executa as ações
 client = P2PClient()
 client.setupClient()
 client.run()
