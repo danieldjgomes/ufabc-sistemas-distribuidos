@@ -1,7 +1,17 @@
 class Message:
+    
+    def __init__(self, method, key, value):
+        self.key = key
+        self.method = method
+        self.value = value
+    
+    def __init__(self, method):
+        self.method = method
+    
     def __init__(self, method, value):
         self.method = method
         self.value = value
+
 
     def __str__(self):
         return f"Message: method={self.method}, value={self.value}"

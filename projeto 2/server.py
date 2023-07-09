@@ -2,6 +2,7 @@ import socket
 import json
 import threading
 from message import Message
+import time
 
 
 
@@ -13,22 +14,32 @@ class Server:
         self.leaderIp = self.ip 
         self.leaderPort = None
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.leaderSocket = None
         self.validServerPorts = [10097, 10098, 10099]
         self.isLeader = None
+        self.map = {}
+        
+    def put(self, key, value):
+        self.map[key] = value
+
+    def get(self, key):
+        if key in self.map:
+            return map[key][0]
+        return None
 
     def setPortSettings(self):
         leaderPort = None
         activePorts = []
         for port in self.validServerPorts:
-             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                 try:
                     sock.connect((self.ip, port))
                     print("Calling server" + str(port))
                     sock.sendall(json.dumps(Message("isLeader", None).to_json()).encode())  
                     isLeader = sock.recv(1024).decode()
-                    if(json.loads(isLeader).get("value") == True):
+                    message = Message.from_json(json.loads(isLeader))
+                    if(message.value == True):
                         leaderPort = port
+                        activePorts.append(port)
                     else:
                         activePorts.append(port)
                 except Exception as e:
@@ -93,6 +104,81 @@ class Server:
             response = self.isLeader
             response_message = Message("isLeaderResponse", response)
             conn.sendall(json.dumps(response_message.to_json()).encode())
+            
+        elif message.method == "PUT":
+            self.doPut(conn, message)
+        elif message.method == "GET":
+            self.doGet(conn, message)
+        elif message.method == "REPLICATION":
+            self.doReplication(conn, message)
         conn.close()
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+
+    def doReplication(self, conn, message):
+        self.put(message.key, message.value)
+        conn.sendall(json.dumps(Message("REPLICATION_OK", None).to_json()).encode())
+
+    def doGet(self, conn, message):
+        timestamp = time.time()
+        item = self.get(message.key)
+        if item == None:
+            conn.sendall(json.dumps(Message("NULL", item).to_json()).encode())
+        else:
+            if item[1] > timestamp:
+                conn.sendall(json.dumps(Message("TRY_OTHER_SERVER_OR_LATER", None).to_json()).encode())
+            else:
+                conn.sendall(json.dumps(Message("GET_OK", item).to_json()).encode())
+
+    def doPut(self, conn, message):
+        if(self.isLeader):
+            self.doLeaderPut(conn, message)
+        else:
+            self.doServerPut(conn, message)
+
+    def doServerPut(self, conn, message):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    try:
+                        sock.connect((self.ip, self.leaderPort))
+                        sock.sendall(json.dumps(message.to_json()).encode())  
+                        replication = sock.recv(1024).decode()
+                        putOk = sock.recv(1024).decode()  
+                    except Exception as e:
+                        print(e)
+        conn.sendall(json.dumps(Message("PUT_OK", None).to_json()).encode())
+
+    def doLeaderPut(self, conn, message):
+        timestamp = time.time()
+        self.put(message.key,(message.value[0], timestamp))
+        message.method = "REPLICATION"
+        message.value = (message.value[0], timestamp)
+        for port in self.validServerPorts:
+            if port != self.leaderPort:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                    try:
+                        sock.connect((self.ip, port))
+                        sock.sendall(json.dumps(message.to_json()).encode())  
+                        serveResponse = sock.recv(1024).decode()
+                        print(serveResponse)      
+                    except Exception as e:
+                        print(e)
+        conn.sendall(json.dumps(Message("PUT_OK", None).to_json()).encode())
 
 Server().start()
