@@ -1,28 +1,23 @@
+import json
+
 class Message:
-    
     def __init__(self, method, key, value):
         self.key = key
         self.method = method
         self.value = value
-    
-    def __init__(self, method):
-        self.method = method
-    
-    def __init__(self, method, value):
-        self.method = method
-        self.value = value
-
 
     def __str__(self):
-        return f"Message: method={self.method}, value={self.value}"
+        return f"Message: method={self.method}, key={self.key} value={self.value}"
 
     def to_json(self):
         return {
             "method": self.method,
+            "key": self.key,
             "value": self.value
         }
 
     @classmethod
     def from_json(cls, json_data):
-        return cls(json_data["method"], json_data["value"])
-    
+        if isinstance(json_data, str):
+            json_data = json.loads(json_data)
+        return cls(json_data["method"], json_data["key"], json_data["value"])
