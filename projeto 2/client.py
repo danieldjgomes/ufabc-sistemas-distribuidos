@@ -8,7 +8,6 @@ from message import Message
 class Client:
     def __init__(self):
         self.servers = [('127.0.0.1', 10097), ('127.0.0.1', 10098), ('127.0.0.1', 10099)]
-        # self.servers = [('127.0.0.1', 10097)]
         self.server = None
 
     def chooseServer(self):
@@ -22,43 +21,47 @@ class Client:
                 response = sock.recv(1024).decode()   
             return json.loads(response)
         except Exception as e:
-            print(f"Error occurred while sending request: {e}")
+            pass
+            
+    def requestInit(self):
+        while True:
+            userInput = input("Escreva 'INIT' para inicializar o cliente: ")
+            if(userInput == "INIT"):
+                break
             
 
     def run(self):
         while True:
             self.chooseServer()
-            print("Server escolhido: ", self.server)
-            print("Options:")
+            print("Opçoes:")
             print("1. PUT")
             print("2. GET")
-            print("3. Exit")
-            choice = input("Enter your choice (1-3): ")
+            choice = input("Escolha a ação: ")
 
             if choice == "1":
-                key = input("Enter the key: ")
-                value = input("Enter the value: ")
+                key = input("Insira a chave: ")
+                value = input("Insira o valor: ")
                 response = self.sendRequest(Message("PUT", key, (value, None)))
-                print("PUT_OK" if response == "PUT_OK" else "Error occurred during PUT operation")
+                response = Message.from_json(response)
+                if (response.method == "PUT_OK"):
+                    print(f"PUT_OK key: [{key}] value: [{value}] timestamp: [{str(int(time.time()))}] realizada no servidor [127.0.0.1:{(self.server)[1]}]")
 
             elif choice == "2":
                 key = input("Enter the key: ")
                 response = self.sendRequest(Message("GET", key, int(time.time())))
-                if response["method"] == "NULL":
-                    print("Key not found")
-                elif response["method"] == "TRY_OTHER_SERVER_OR_LATER":
-                    print("Try other server or request later")
+                response = Message.from_json(response)
+                if response.method == "NULL":
+                    print("Chave não encontrada")
+                elif response.method == "TRY_OTHER_SERVER_OR_LATER":
+                    print("Tente outro servidor ou mais tarde")
                 else:
-                    print(f"Value: {response})")
+                    print(f"GET key: [{response.key}] value: [{response.value[0]}] obtido do servidor [127.0.0.1:{(self.server)[1]}], meu timestamp [{str(int(time.time()))}] e do servidor [{str(response.value[1])}]")
 
-            elif choice == "3":
-                print("Exiting...")
-                break
 
             else:
-                print("Invalid choice. Please try again.")
+                print("Opção inválida")
 
 
-# Run the client
 client = Client()
+client.requestInit()
 client.run()

@@ -4,8 +4,6 @@ import threading
 from message import Message
 import time
 
-
-
 class Server:
     
     def __init__(self):
@@ -35,7 +33,6 @@ class Server:
                 try:
                     sock.settimeout(1)
                     sock.connect((self.ip, port))
-                    print("Calling server " + str(port))
                     sock.sendall(json.dumps(Message("isLeader", None,None).to_json()).encode())  
                     isLeader = sock.recv(1024).decode()
                     message = Message.from_json(json.loads(isLeader))
@@ -52,11 +49,10 @@ class Server:
     def setLeaderPort(self, leaderPort):
         while True:
             try:
-                inputPort = int(input("Enter ServerLeader the port number: "))
+                inputPort = int(input("Insira a porta do server leader: "))
                 if inputPort in self.validServerPorts:
                     if leaderPort == None:  
                         if inputPort == self.port:
-                            print("The server is the leader.")
                             self.isLeader = True
                             break
                     else:
@@ -65,7 +61,7 @@ class Server:
                             self.leaderPort = inputPort
                             break
                 else:
-                    print("Invalid port. Please enter a valid port number: 10097, 10098, or 10099")
+                    print("Entrada inválida, as portas devem pertencer ao grupo [10097, 10098, 10099].")
             except ValueError:
                 pass
         
@@ -73,18 +69,15 @@ class Server:
     def setPort(self, activePorts):
         while True:
             try:
-                inputPort = int(input("Enter server the port number: "))
+                inputPort = int(input("Insira o numero da porta do servidor: "))
                 if inputPort in self.validServerPorts:
                     if not (inputPort in activePorts):
                         self.port = inputPort
                         break
-                else:
-                    print("Invalid port. Please enter a valid port number: 10097, 10098, or 10099")
             except ValueError:
                 pass
 
     def start(self):
-        # Get server port and leader info
         self.setPortSettings()
 
         self.socket.bind((self.ip, self.port))
@@ -116,15 +109,14 @@ class Server:
         conn.sendall(json.dumps(Message("REPLICATION_OK", None, None).to_json()).encode())
 
     def doGet(self, conn, message):
-        timestamp = int(time.time())
         item = self.get(message.key)
         if item == None:
             conn.sendall(json.dumps(Message("NULL", item, None).to_json()).encode())
         else:
-            if item[1] > timestamp:
-                conn.sendall(json.dumps(Message("TRY_OTHER_SERVER_OR_LATER", None, None).to_json()).encode())
-            else:
+            if item[1] <= (message.value)[1]:
                 conn.sendall(json.dumps(Message("GET_OK", message.key, item).to_json()).encode())
+            else:
+                conn.sendall(json.dumps(Message("TRY_OTHER_SERVER_OR_LATER", None, None).to_json()).encode())
 
     def doPut(self, conn, message):
         if(self.isLeader):
@@ -133,7 +125,6 @@ class Server:
             self.doServerPut(conn, message)
 
     def doServerPut(self, conn, message):
-        print("Server put to leader ", self.leaderPort)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     try:
                         sock.connect((self.ip, self.leaderPort))
