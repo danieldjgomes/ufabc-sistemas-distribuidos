@@ -18,7 +18,6 @@ class Server:
         
     def put(self, key, value):
         self.map[key] = value
-        print(self.map)
 
     def get(self, key):
         if key in self.map.keys():
@@ -54,6 +53,7 @@ class Server:
                     if leaderPort == None:  
                         if inputPort == self.port:
                             self.isLeader = True
+                            self.leaderPort = inputPort
                             break
                     else:
                         if inputPort == leaderPort:
@@ -110,13 +110,15 @@ class Server:
 
     def doGet(self, conn, message):
         item = self.get(message.key)
-        if item == None:
-            conn.sendall(json.dumps(Message("NULL", item, None).to_json()).encode())
+        if item is None:
+            response = Message("NULL", None, None)
+        elif message.value[1] is not None and item[1] < message.value[1]:
+            response = Message("TRY_OTHER_SERVER_OR_LATER", None, None)
         else:
-            if item[1] <= (message.value)[1]:
-                conn.sendall(json.dumps(Message("GET_OK", message.key, item).to_json()).encode())
-            else:
-                conn.sendall(json.dumps(Message("TRY_OTHER_SERVER_OR_LATER", None, None).to_json()).encode())
+            response = Message("GET_OK", message.key, item)
+
+        conn.sendall(json.dumps(response.to_json()).encode())
+
 
     def doPut(self, conn, message):
         if(self.isLeader):
@@ -131,17 +133,21 @@ class Server:
                         sock.sendall(json.dumps(message.to_json()).encode())  
                         replication = sock.recv(1024).decode()
                         putOk = sock.recv(1024).decode()  
+                        message = Message.from_json(putOk)
                     except Exception as e:
                         print(e)
-        conn.sendall(json.dumps(Message("PUT_OK", None, None).to_json()).encode())
+        conn.sendall(json.dumps(Message("PUT_OK", message.key, message.value).to_json()).encode())
 
     def doLeaderPut(self, conn, message):
         timestamp = int(time.time())
-        self.put(message.key,(message.value, timestamp))
+        message.value = ((message.value)[0], timestamp)
+        self.put(message.key,message.value)
         message.method = "REPLICATION"
         message.value = (message.value[0], timestamp)
         for port in self.validServerPorts:
             if port != self.leaderPort:
+                print("Aguardando para replicar para o server " + str(port))
+                time.sleep(10)
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                     try:
                         sock.settimeout(1)
@@ -151,6 +157,6 @@ class Server:
                         print("Leader sent to server" + str(port))      
                     except Exception as e:
                         print(e)
-        conn.sendall(json.dumps(Message("PUT_OK", None, None).to_json()).encode())
+        conn.sendall(json.dumps(Message("PUT_OK", message.key, ((message.value)[0], timestamp)).to_json()).encode())
 
 Server().start()
