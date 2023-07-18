@@ -7,7 +7,7 @@ class Message:
         self.value = value
 
     def __str__(self):
-        return f"Message: method={self.method}, key={self.key} value={self.value}"
+        return f"Mensagem: method={self.method}, key={self.key} value={self.value}"
 
     def to_json(self):
         return {

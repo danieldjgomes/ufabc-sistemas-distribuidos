@@ -36,7 +36,7 @@ class Client:
             if(userInput == "INIT"):
                 break
 
-    def process_put(self, targetServer, key, value):
+    def doPut(self, targetServer, key, value):
         message = Message("PUT", key, (value, None))
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
@@ -51,7 +51,7 @@ class Client:
             print(f"PUT_OK key: [{response.key}] value: [{(response.value)[0]}] timestamp: [{(response.value)[1]}] realizada no servidor [127.0.0.1:{(targetServer)[1]}]")
             self.put(key, response.value)
 
-    def process_get(self, targetServer,key):
+    def doGet(self, targetServer,key):
         localValue = self.get(key)
         localTimestamp = None if localValue == None else localValue[1]
         message = Message("GET", key, (None,(localTimestamp)))
@@ -82,10 +82,10 @@ class Client:
         if choice == "1":
             key = input("Insira a chave: ")
             value = input("Insira o valor: ")
-            threading.Thread(target=self.process_put, args=(targetServer, key , value)).start()
+            threading.Thread(target=self.doPut, args=(targetServer, key , value)).start()
         elif choice == "2":
             key = input("Enter the key: ")
-            threading.Thread(target=self.process_get, args=(targetServer,key)).start()
+            threading.Thread(target=self.doGet, args=(targetServer,key)).start()
         else:
             print("Opção inválida")
 
