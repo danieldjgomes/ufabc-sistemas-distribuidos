@@ -17,14 +17,36 @@ class Server:
         self.map = {}
         
     def put(self, key, value):
+        """
+        Armazena um par chave-valor no mapa local.
+
+        Args:
+            key (str): Chave a ser armazenada.
+            value (str): Valor correspondente à chave.
+
+        """
         self.map[key] = value
 
     def get(self, key):
+        """
+        Retorna o valor associado a uma chave.
+
+        Args:
+            key (str): Chave a ser pesquisada.
+
+        Returns:
+            str: Valor associado à chave, ou None se a chave não existir.
+
+        """
         if key in self.map.keys():
             return self.map[key]
         return None
 
     def setPortSettings(self):
+        """
+        Configura as portas ativas e a porta do líder.
+
+        """
         leaderPort = None
         activePorts = []
         for port in self.validServerPorts:
@@ -46,9 +68,16 @@ class Server:
         self.setLeaderPort(leaderPort)
 
     def setLeaderPort(self, leaderPort):
+        """
+        Define a porta do líder.
+
+        Args:
+            leaderPort (int): Porta do líder.
+
+        """
         while True:
             try:
-                inputPort = int(input("Insira a porta do server leader: "))
+                inputPort = int(input("Insira a porta do server líder: "))
                 if inputPort in self.validServerPorts:
                     if leaderPort == None:  
                         if inputPort == self.port:
@@ -67,9 +96,16 @@ class Server:
         
 
     def setPort(self, activePorts):
+        """
+        Define a porta do servidor.
+
+        Args:
+            activePorts (list): Lista de portas ativas.
+
+        """
         while True:
             try:
-                inputPort = int(input("Insira o numero da porta do servidor: "))
+                inputPort = int(input("Insira o número da porta do servidor: "))
                 if inputPort in self.validServerPorts:
                     if not (inputPort in activePorts):
                         self.port = inputPort
@@ -78,6 +114,10 @@ class Server:
                 pass
 
     def start(self):
+        """
+        Inicia o servidor.
+
+        """
         self.setPortSettings()
 
         self.socket.bind((self.ip, self.port))
@@ -87,6 +127,14 @@ class Server:
             threading.Thread(target=self.handleClients, args=(conn, addr)).start()
         
     def handleClients(self, conn, addr):
+        """
+        Lida com as solicitações dos clientes.
+
+        Args:
+            conn (socket): Objeto socket da conexão.
+            addr (tuple): Tupla contendo o endereço IP e a porta do cliente.
+
+        """
         data = conn.recv(1024).decode()
         message = Message.from_json(data)
 
@@ -105,10 +153,26 @@ class Server:
         
 
     def doReplication(self, conn, message):
+        """
+        Executa a replicação dos dados nos servidores.
+
+        Args:
+            conn (socket): Objeto socket da conexão.
+            message (Message): Objeto Message contendo a solicitação de replicação.
+
+        """
         self.put(message.key, message.value)
         conn.sendall(json.dumps(Message("REPLICATION_OK", None, None).to_json()).encode())
 
     def doGet(self, conn, message):
+        """
+        Executa a operação GET.
+
+        Args:
+            conn (socket): Objeto socket da conexão.
+            message (Message): Objeto Message contendo a solicitação de GET.
+
+        """
         item = self.get(message.key)
         if item is None:
             response = Message("NULL", None, None)
@@ -121,24 +185,48 @@ class Server:
 
 
     def doPut(self, conn, message):
+        """
+        Executa a operação PUT.
+
+        Args:
+            conn (socket): Objeto socket da conexão.
+            message (Message): Objeto Message contendo a solicitação de PUT.
+
+        """
         if(self.isLeader):
             self.doLeaderPut(conn, message)
         else:
             self.doServerPut(conn, message)
 
     def doServerPut(self, conn, message):
+        """
+        Executa a operação PUT em um servidor não líder.
+
+        Args:
+            conn (socket): Objeto socket da conexão.
+            message (Message): Objeto Message contendo a solicitação de PUT.
+
+        """
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-                    try:
-                        sock.connect((self.ip, self.leaderPort))
-                        sock.sendall(json.dumps(message.to_json()).encode())  
-                        replication = sock.recv(1024).decode()
-                        putOk = sock.recv(1024).decode()  
-                        message = Message.from_json(putOk)
-                    except Exception as e:
-                        print(e)
+            try:
+                sock.connect((self.ip, self.leaderPort))
+                sock.sendall(json.dumps(message.to_json()).encode())  
+                replication = sock.recv(1024).decode()
+                putOk = sock.recv(1024).decode()  
+                message = Message.from_json(putOk)
+            except Exception as e:
+                pass
         conn.sendall(json.dumps(Message("PUT_OK", message.key, message.value).to_json()).encode())
 
     def doLeaderPut(self, conn, message):
+        """
+        Executa a operação PUT no servidor líder.
+
+        Args:
+            conn (socket): Objeto socket da conexão.
+            message (Message): Objeto Message contendo a solicitação de PUT.
+
+        """
         timestamp = int(time.time())
         message.value = ((message.value)[0], timestamp)
         self.put(message.key,message.value)
@@ -153,10 +241,9 @@ class Server:
                         sock.settimeout(1)
                         sock.connect((self.ip, port))
                         sock.sendall(json.dumps(message.to_json()).encode())  
-                        serveResponse = sock.recv(1024).decode()
-                        print("Leader sent to server" + str(port))      
+                        serveResponse = sock.recv(1024).decode()  
                     except Exception as e:
-                        print(e)
+                        pass
         conn.sendall(json.dumps(Message("PUT_OK", message.key, ((message.value)[0], timestamp)).to_json()).encode())
 
 Server().start()
